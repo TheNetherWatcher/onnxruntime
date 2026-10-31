@@ -5,14 +5,17 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
-using Clock = std::chrono::steady_clock;
-template <class F> double best_ms(F&& f) {
-  double best = 1e30;
-  for (int r = 0; r < 9; ++r) { auto t0 = Clock::now(); f(); best = std::min(best, std::chrono::duration<double, std::milli>(Clock::now() - t0).count()); }
-  return best;
-}
 constexpr size_t C = 512;
 constexpr size_t NEL = size_t(1) << 24;
+using Clock = std::chrono::steady_clock;
+float* g_out = nullptr;
+volatile float g_sink;
+template <class F> double best_ms(F&& f) {
+  double best = 1e30;
+  for (int r = 0; r < 9; ++r) { auto t0 = Clock::now(); f(); best = std::min(best, std::chrono::duration<double, std::milli>(Clock::now() - t0).count());
+    float acc = 0; for (size_t i = 0; i < NEL; i += 4099) acc += g_out[i]; g_sink = acc; }
+  return best;
+}
 
 // unpack variants (signed int4) --------------------------------------------
 inline void unpack_i8_interleave(const uint8_t* p, size_t nbytes, int8_t* d) {
@@ -38,6 +41,7 @@ int main() {
   std::vector<uint8_t> in(NEL / 2);
   for (size_t i = 0; i < in.size(); ++i) in[i] = uint8_t(i * 2654435761u >> 13);
   std::vector<float> out(NEL), sc(NEL);
+  g_out = out.data();
   for (size_t i = 0; i < NEL; ++i) sc[i] = 0.001f * float(i % 97);
   std::vector<uint8_t> zpb(NEL / 2, 0x35);
   alignas(64) int8_t v8[C], z8[C];
