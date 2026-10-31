@@ -1,0 +1,52 @@
+name: subbyte-dq-bench
+on:
+  push:
+    branches: [subbyte-dq-dev]
+  workflow_dispatch:
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-latest, windows-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .ci_bench
+      - name: CPU (Linux)
+        if: runner.os == 'Linux'
+        run: lscpu | grep -E "Model name|^CPU\(s\)|Flags" | cut -c1-200; nproc
+      - name: CPU (Windows)
+        if: runner.os == 'Windows'
+        run: Get-CimInstance Win32_Processor | Select-Object Name,NumberOfLogicalProcessors | Format-List
+      - name: GCC -O3 (Release flags)
+        if: runner.os == 'Linux'
+        working-directory: .ci_bench
+        run: |
+          g++ --version | head -1
+          g++ -std=c++20 -O3 -DNDEBUG harness.cpp -o h -pthread
+          ./h | tee out.txt
+          ! grep -q MISMATCH out.txt
+          grep -q "fuzz: 0/" out.txt
+      - name: Clang -O3
+        if: runner.os == 'Linux'
+        working-directory: .ci_bench
+        run: |
+          clang++ --version | head -1
+          clang++ -std=c++20 -O3 -DNDEBUG harness.cpp -o h -pthread
+          ./h | tee out.txt
+          ! grep -q MISMATCH out.txt
+          grep -q "fuzz: 0/" out.txt
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - name: MSVC /O2
+        if: runner.os == 'Windows'
+        working-directory: .ci_bench
+        shell: cmd
+        run: |
+          cl /nologo /std:c++20 /O2 /EHsc /DNDEBUG harness.cpp /Fe:h.exe
+          h.exe > out.txt
+          type out.txt
+          findstr /C:"MISMATCH" out.txt && exit /b 1
+          findstr /C:"fuzz: 0/" out.txt || exit /b 1
