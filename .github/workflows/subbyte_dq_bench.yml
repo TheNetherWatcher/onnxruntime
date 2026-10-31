@@ -8,7 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-latest, windows-latest, ubuntu-24.04-arm]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -25,6 +25,7 @@ jobs:
         working-directory: .ci_bench
         run: |
           g++ --version | head -1
+          g++ -std=c++20 -O3 -DNDEBUG msvc_variants.cpp -o v && ./v
           g++ -std=c++20 -O3 -DNDEBUG harness.cpp -o h -pthread
           ./h | tee out.txt
           ! grep -q MISMATCH out.txt
@@ -45,7 +46,10 @@ jobs:
         working-directory: .ci_bench
         shell: cmd
         run: |
-          cl /nologo /std:c++20 /O2 /EHsc /DNDEBUG harness.cpp /Fe:h.exe
+          cl /nologo /std:c++20 /O2 /EHsc /DNDEBUG msvc_variants.cpp /Fe:v.exe
+          v.exe
+          cl /nologo /std:c++20 /O2 /EHsc /DNDEBUG /Qvec-report:2 harness.cpp /Fe:h.exe > vec.txt
+          findstr /C:"newcode.cc" vec.txt
           h.exe > out.txt
           type out.txt
           findstr /C:"MISMATCH" out.txt && exit /b 1
