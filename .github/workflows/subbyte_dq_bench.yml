@@ -46,7 +46,7 @@ jobs:
         working-directory: .ci_bench
         shell: cmd
         run: |
-          cl /nologo /std:c++20 /O2 /EHsc /DNDEBUG msvc_variants.cpp /Fe:v.exe
+          cl /nologo /std:c++20 /O2 /EHsc /DNDEBUG /Qvec-report:2 msvc_variants.cpp /Fe:v.exe | findstr /V /C:"C5001"
           v.exe
           cl /nologo /std:c++20 /O2 /EHsc /DNDEBUG /Qvec-report:2 harness.cpp /Fe:h.exe > vec.txt
           findstr /C:"newcode.cc" vec.txt
