@@ -153,5 +153,6 @@ int main() {
     check<2, false>(rng, 4096, 4096, 1, 64, true, thr, true);
     check<4, true>(rng, 1, 1 << 22, 2, 0, true, thr, true);   // tiny rows
     check<4, true>(rng, 1, 1 << 21, 4, 32, true, thr, true);  // tiny rows, blocked
+    check<4, true>(rng, 1, 1, 1 << 24, 0, true, thr, true);  // per-tensor
   }
 }

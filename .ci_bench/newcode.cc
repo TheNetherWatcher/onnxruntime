@@ -108,10 +108,15 @@ struct DequantizeLinearApply<T, ScaleT, OutT, true, elements_per_byte> {
 
     // Each row of N elements shares one scale and zero point.
     if (N >= kSubByteChunk) {
-      ParallelForSubByte<OutT>(thread_pool, M * K, N, [&](size_t row) {
+      // Long rows: split each row into chunks so that a single row (e.g. per-tensor) is still parallel.
+      const size_t chunks_per_row = (N + kSubByteChunk - 1) / kSubByteChunk;
+      ParallelForSubByte<OutT>(thread_pool, M * K * chunks_per_row, kSubByteChunk, [&](size_t unit) {
+        const size_t row = unit / chunks_per_row;
+        const size_t n = (unit % chunks_per_row) * kSubByteChunk;
+        const size_t len = std::min(kSubByteChunk, N - n);
         const size_t k = row % K;
-        DequantizeSubByteRun<T, ScaleT, OutT, elements_per_byte, false>(input, row * N, N, scale + k, zero_point, k,
-                                                                        output + row * N);
+        DequantizeSubByteRun<T, ScaleT, OutT, elements_per_byte, false>(input, row * N + n, len, scale + k,
+                                                                        zero_point, k, output + row * N + n);
       });
       return;
     }
@@ -182,12 +187,14 @@ struct DequantizeLinearApply<T, ScaleT, OutT, true, elements_per_byte> {
 
     // Each row of N elements uses N consecutive scales and zero points.
     if (N >= kSubByteChunk) {
-      ParallelForSubByte<OutT>(thread_pool, M * K, N, [&](size_t row) {
-        const size_t m = row / K;
-        const size_t k = row % K;
-        const size_t s = (m * num_blocks + k / quant_block_size) * N;
-        DequantizeSubByteRun<T, ScaleT, OutT, elements_per_byte, true>(input, row * N, N, scale + s, zero_point, s,
-                                                                       output + row * N);
+      const size_t chunks_per_row = (N + kSubByteChunk - 1) / kSubByteChunk;
+      ParallelForSubByte<OutT>(thread_pool, M * K * chunks_per_row, kSubByteChunk, [&](size_t unit) {
+        const size_t row = unit / chunks_per_row;
+        const size_t n = (unit % chunks_per_row) * kSubByteChunk;
+        const size_t len = std::min(kSubByteChunk, N - n);
+        const size_t s = (row / K * num_blocks + row % K / quant_block_size) * N + n;
+        DequantizeSubByteRun<T, ScaleT, OutT, elements_per_byte, true>(input, row * N + n, len, scale + s, zero_point,
+                                                                       s, output + row * N + n);
       });
       return;
     }
